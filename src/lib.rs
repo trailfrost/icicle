@@ -6,56 +6,58 @@ use std::{env, str::FromStr};
 
 use args::Args;
 
-/// Reasons for a help screen to be triggered.
+/// reasons for a help screen to be triggered.
 pub enum HelpReason {
-    /// The user asked for help by passing a `--help` argument.
+    /// user asked for help with `--help`.
     UserAsked,
-    /// The command the user tried to run doesn't have an action.
+    /// command lacks an action.
     MissingAction,
-    /// An option is missing from the CLI arguments.
+    /// required option missing from arguments.
     MissingOption(CLIOption),
-    /// A positional argument is missing from the CLI arguments.
+    /// required positional argument missing, given start and end indexes.
     MissingArgument(usize, usize),
 }
 
-/// A command line option (--example, -e).
+/// a command line option (--example, -e).
 pub struct CLIOption {
-    /// All aliases for the CLI option.
+    /// all aliases for this option.
     pub names: Vec<String>,
-    /// A short description of the CLI option.
+    /// short description of the option.
     pub desc: String,
-    /// If this option is required for the command to run.
+    /// whether this option is required.
     pub required: bool,
 }
 
-/// A command line positional argument.
+/// a command line positional argument.
 pub struct CLIArgument {
-    /// A short description of the positional argument.
+    /// short description of the argument.
     pub desc: String,
-    /// If this argument is required for the command to run.
+    /// whether this argument is required.
     pub required: bool,
+    /// whether this argument captures multiple values.
+    pub array: bool,
 }
 
-/// Represents a CLI command.
+/// represents a cli command.
 pub struct Command {
-    /// A list of aliases for the command.
+    /// all aliases for the command.
     names: Vec<String>,
-    /// The function to run when running this command.
+    /// function run when the command is executed.
     action: Option<Box<dyn Fn(Args) -> i32>>,
-    /// The function to run when a help screen should be shown.
-    help: Option<Box<dyn Fn(HelpReason, &Command, Args) -> ()>>,
-    /// A short description of your command.
+    /// function run to show help screen.
+    help: Option<Box<dyn Fn(HelpReason, &Command, Args)>>,
+    /// optional short description of the command.
     desc: Option<String>,
-    /// All subcommands inside this command.
+    /// subcommands of this command.
     children: Vec<Command>,
-    /// All options in the command.
+    /// options available to this command.
     options: Vec<CLIOption>,
-    /// All positional arguments in the command.
+    /// positional arguments for this command.
     arguments: Vec<CLIArgument>,
 }
 
 impl Command {
-    /// Creates a new command.
+    /// creates a new command with a given name.
     pub fn new(name: &str) -> Command {
         Command {
             names: vec![name.to_string()],
@@ -68,32 +70,35 @@ impl Command {
         }
     }
 
-    /// Sets the action for a command.
-    pub fn action<T: Fn(Args) -> i32 + 'static>(&mut self, action: T) -> &Self {
+    /// sets the action to run for the command.
+    pub fn action<T: Fn(Args) -> i32 + 'static>(&mut self, action: T) -> &mut Self {
         self.action = Some(Box::new(action));
         self
     }
 
-    /// Sets the help action for a command.
-    pub fn help<T: Fn(HelpReason, &Command, Args) -> () + 'static>(&mut self, action: T) -> &Self {
+    /// sets the help action for the command.
+    pub fn help<T: Fn(HelpReason, &Command, Args) -> () + 'static>(
+        &mut self,
+        action: T,
+    ) -> &mut Self {
         self.help = Some(Box::new(action));
         self
     }
 
-    /// Sets the description for a command.
-    pub fn desc(&mut self, desc: &str) -> &Self {
+    /// sets the description of the command.
+    pub fn desc(&mut self, desc: &str) -> &mut Self {
         self.desc = Some(desc.to_string());
         self
     }
 
-    /// Adds an alias to the command.
-    pub fn alias(&mut self, alias: &str) -> &Self {
+    /// adds an alias to the command.
+    pub fn alias(&mut self, alias: &str) -> &mut Self {
         self.names.push(alias.to_string());
         self
     }
 
-    /// Adds a required option to the command.
-    pub fn option(&mut self, names: &str, desc: &str) -> &Self {
+    /// adds a required option with names and description.
+    pub fn option(&mut self, names: &str, desc: &str) -> &mut Self {
         let split = names.split(",");
 
         self.options.push(CLIOption {
@@ -104,17 +109,28 @@ impl Command {
         self
     }
 
-    /// Adds a required argument to the command.
-    pub fn argument(&mut self, desc: &str) -> &Self {
+    /// adds a required positional argument with description.
+    pub fn argument(&mut self, desc: &str) -> &mut Self {
         self.arguments.push(CLIArgument {
             desc: desc.to_string(),
             required: true,
+            array: false,
         });
         self
     }
 
-    /// Adds an optional option to the command.
-    pub fn opt_option(&mut self, names: &str, desc: &str) -> &Self {
+    /// adds a positional argument that captures multiple values.
+    pub fn array_argument(&mut self, desc: &str) -> &mut Self {
+        self.arguments.push(CLIArgument {
+            desc: desc.to_string(),
+            required: false,
+            array: true,
+        });
+        self
+    }
+
+    /// adds an optional option with names and description.
+    pub fn opt_option(&mut self, names: &str, desc: &str) -> &mut Self {
         let split = names.split(",");
 
         self.options.push(CLIOption {
@@ -125,32 +141,33 @@ impl Command {
         self
     }
 
-    /// Adds an optional argument to the command.
-    pub fn opt_argument(&mut self, desc: &str) -> &Self {
+    /// adds an optional positional argument.
+    pub fn opt_argument(&mut self, desc: &str) -> &mut Self {
         self.arguments.push(CLIArgument {
             desc: desc.to_string(),
             required: false,
+            array: false,
         });
         self
     }
 
-    /// Adds a sub command to the command.
-    pub fn r#use(&mut self, other: Command) -> &Self {
+    /// adds a subcommand to this command.
+    pub fn add(&mut self, other: Command) -> &mut Self {
         self.children.push(other);
         self
     }
 
-    /// Creates a new sub command and adds it to the command.
-    pub fn command(&mut self, name: &str) -> &Command {
+    /// creates and adds a new subcommand by name.
+    pub fn command(&mut self, name: &str) -> &mut Command {
         let command = Command::new(name);
         self.children.push(command);
-        self.children.last().unwrap()
+        self.children.last_mut().unwrap()
     }
 
-    /// Runs the command with the arguments you specify.
+    /// runs the command with given argument strings.
     pub fn run(&self, args: Vec<String>) -> i32 {
         let (command, args, help_option) = Args::parse(self, args);
-        if args.has("help") {
+        if args.has("--help") {
             let reason = HelpReason::MissingAction;
             match help_option {
                 Some(help) => help(reason, command, args),
@@ -172,17 +189,17 @@ impl Command {
         }
     }
 
-    /// Runs the command with a list of string slices instead of `String`s.
+    /// runs the command with argument string slices.
     pub fn run_str(&self, args: Vec<&str>) -> i32 {
         self.run(args.iter().map(|arg| arg.to_string()).collect())
     }
 
-    /// Runs the command with `env::args()`.
+    /// runs the command using environment arguments.
     pub fn run_env(&self) -> i32 {
-        self.run(env::args().collect())
+        self.run(env::args().skip(1).collect())
     }
 
-    /// Default help function.
+    /// default help function called on help reasons.
     fn default_help(&self, reason: HelpReason) {
         match &reason {
             HelpReason::MissingAction | HelpReason::UserAsked => {
@@ -203,20 +220,20 @@ impl Command {
         }
     }
 
-    /// Generates a help screen.
+    /// generates a help screen string.
     pub fn generate_help(&self) -> String {
         let mut builder = String::new();
-        builder.push_str(&format!("usage:{}", self.generate_usage(" ")));
-        builder.push_str(&format!("arguments: {}", self.generate_args("\t", "\n")));
-        builder.push_str(&format!("options: {}", self.generate_opts("\t", "\n")));
+        builder.push_str(&format!("usage:{}\n", self.generate_usage(" ")));
+        builder.push_str(&format!("arguments:\n{}", self.generate_args("\t", "\n")));
+        builder.push_str(&format!("options:\n{}", self.generate_opts("\t", "\n")));
         builder.push_str(&format!(
-            "commands: {}",
+            "commands:\n{}",
             self.generate_sub_commands("\t", "\n")
         ));
         builder
     }
 
-    /// Generates a usage string.
+    /// generates a usage string with a prefix.
     pub fn generate_usage(&self, prefix: &str) -> String {
         let mut builder = String::from_str(prefix).unwrap();
         builder.push_str(&self.names.get(0).unwrap());
@@ -230,20 +247,24 @@ impl Command {
         builder
     }
 
-    /// Generates an arguments string.
+    /// generates arguments string with prefix and separator.
     pub fn generate_args(&self, prefix: &str, separator: &str) -> String {
         let mut builder = String::new();
         for (i, arg) in self.arguments.iter().enumerate() {
             builder.push_str(&format!(
-                "{}#{}: {} ({}){}",
+                "{}{}: {}{}{}",
                 prefix,
-                i,
-                arg.desc,
-                if arg.required {
-                    "required"
+                if arg.array {
+                    if i != 0 {
+                        "<everything else>".to_string()
+                    } else {
+                        "all arguments".to_string()
+                    }
                 } else {
-                    "not required"
+                    format!("#{i}")
                 },
+                arg.desc,
+                if arg.required { " (required)" } else { "" },
                 separator
             ));
         }
@@ -251,7 +272,7 @@ impl Command {
         builder
     }
 
-    /// Generates an options string.
+    /// generates options string with prefix and separator.
     pub fn generate_opts(&self, prefix: &str, separator: &str) -> String {
         let mut builder = String::new();
         for opt in &self.options {
@@ -272,7 +293,7 @@ impl Command {
         builder
     }
 
-    /// Generates a sub commands string.
+    /// generates subcommands string with prefix and separator.
     pub fn generate_sub_commands(&self, prefix: &str, separator: &str) -> String {
         let mut builder = String::new();
         for command in &self.children {
