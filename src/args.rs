@@ -1,6 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
-use crate::Command;
+use crate::{Command, HelpReason};
 
 pub struct Args {
     pub opts: HashMap<String, String>,
@@ -8,14 +8,22 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn parse<'a>(command: &'a Command, arguments: Vec<String>) -> (&'a Command, Args) {
+    pub fn parse<'a>(
+        command: &'a Command,
+        arguments: Vec<String>,
+    ) -> (
+        &'a Command,
+        Args,
+        Option<&'a Box<dyn Fn(HelpReason, &'a Command, Args)>>,
+    ) {
         let mut current_command = command;
         let mut parsed_args = Args {
             opts: HashMap::new(),
             pos: Vec::new(),
         };
+        let mut help_fn = None;
 
-        let mut found_command: bool = false;
+        let mut ignore_args: bool = false;
         let mut ignore_options: bool = false;
         for arg in arguments {
             if !ignore_options {
@@ -40,7 +48,7 @@ impl Args {
                 }
             }
 
-            if found_command {
+            if ignore_args {
                 parsed_args.pos.push(arg);
             } else {
                 let mut found = false;
@@ -48,20 +56,31 @@ impl Args {
                     for alias in &command.names {
                         if *arg == *alias {
                             current_command = command;
+                            help_fn = match &current_command.help {
+                                Some(new_help_fn) => Some(new_help_fn),
+                                None => help_fn,
+                            };
                             found = true;
                             break 'child_loop;
                         }
                     }
                 }
 
-                found_command = !found;
+                ignore_args = !found;
             }
         }
 
-        (current_command, parsed_args)
+        (current_command, parsed_args, help_fn)
     }
 
-    pub fn parse_str<'a>(command: &'a Command, arguments: Vec<&str>) -> (&'a Command, Args) {
+    pub fn parse_str<'a>(
+        command: &'a Command,
+        arguments: Vec<&str>,
+    ) -> (
+        &'a Command,
+        Args,
+        Option<&'a Box<dyn Fn(HelpReason, &'a Command, Args)>>,
+    ) {
         Self::parse(
             command,
             arguments.iter().map(|arg| arg.to_string()).collect(),
@@ -69,13 +88,21 @@ impl Args {
     }
 
     pub fn new(arguments: Vec<String>) -> Args {
-        let (_, arguments) = Self::parse(&Command::new(""), arguments);
+        let (_, arguments, _) = Self::parse(&Command::new(""), arguments);
         arguments
     }
 
     pub fn new_str(arguments: Vec<&str>) -> Args {
-        let (_, arguments) = Self::parse_str(&Command::new(""), arguments);
+        let (_, arguments, _) = Self::parse_str(&Command::new(""), arguments);
         arguments
+    }
+
+    pub fn has(&self, name: &str) -> bool {
+        self.opts.contains_key(name)
+    }
+
+    pub fn has_at(&self, pos: usize) -> bool {
+        pos < self.pos.len()
     }
 
     pub fn get<T>(&self, name: &str) -> Option<T>
