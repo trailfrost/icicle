@@ -2,5 +2,9 @@
 name = "icicle"
 version = "0.1.0"
 edition = "2024"
+description = "A CLI parser library with syntax similar to commander.js"
+license = "MIT"
+documentation = "https://docs.rs/icicle"
+keywords = ["cli", "command-line", "parser", "runner"]
 
 [dependencies]

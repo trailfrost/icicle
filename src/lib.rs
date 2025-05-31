@@ -243,6 +243,9 @@ impl Command {
         if self.arguments.len() > 0 {
             builder.push_str(" [<arguments>]");
         }
+        if self.children.len() > 0 {
+            builder.push_str(" <command>");
+        }
 
         builder
     }
