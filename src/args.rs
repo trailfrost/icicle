@@ -222,6 +222,7 @@ impl Args {
         self.opts.iter_mut()
     }
 
+    /// joins all positional arguments together.
     pub fn join(&self, separator: &str) -> String {
         self.pos.join(separator).to_string()
     }

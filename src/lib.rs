@@ -21,12 +21,16 @@ pub enum HelpReason {
 }
 
 #[derive(Debug, Clone)]
+/// reasons that running a command might've failed. this is different from `HelpReason` because it's the return type of the running `command`.
 pub enum CommandError {
+    /// required option is missing from arguments.
     MissingOption(CLIOption),
+    /// required positional argument, given start and end indexes.
     MissingArgument(usize, usize),
 }
 
 impl fmt::Display for CommandError {
+    /// formats a command.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::MissingOption(option) => write!(f, "Missing option: {:#?}", option),
