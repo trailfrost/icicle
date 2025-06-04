@@ -2,22 +2,44 @@ mod args;
 #[cfg(test)]
 mod tests;
 
-use std::{env, str::FromStr};
+use core::fmt;
+use std::{env, error::Error, str::FromStr};
 
 use args::Args;
 
+#[derive(Debug, Clone)]
 /// reasons for a help screen to be triggered.
-pub enum HelpReason<'a> {
+pub enum HelpReason {
     /// user asked for help with `--help`.
     UserAsked,
     /// command lacks an action.
     MissingAction,
     /// required option missing from arguments.
-    MissingOption(&'a CLIOption),
+    MissingOption(CLIOption),
     /// required positional argument missing, given start and end indexes.
     MissingArgument(usize, usize),
 }
 
+#[derive(Debug, Clone)]
+pub enum CommandError {
+    MissingOption(CLIOption),
+    MissingArgument(usize, usize),
+}
+
+impl fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingOption(option) => write!(f, "Missing option: {:#?}", option),
+            Self::MissingArgument(start, end) => {
+                write!(f, "Missing arguments from {start} to {end}")
+            }
+        }
+    }
+}
+
+impl Error for CommandError {}
+
+#[derive(Debug, Clone)]
 /// a command line option (--example, -e).
 pub struct CLIOption {
     /// all aliases for this option.
@@ -28,6 +50,7 @@ pub struct CLIOption {
     pub required: bool,
 }
 
+#[derive(Debug, Clone)]
 /// a command line positional argument.
 pub struct CLIArgument {
     /// short description of the argument.
@@ -43,7 +66,7 @@ pub struct Command {
     /// all aliases for the command.
     names: Vec<String>,
     /// function run when the command is executed.
-    action: Option<Box<dyn Fn(Args) -> i32>>,
+    action: Option<Box<dyn Fn(Args) -> Result<(), Box<dyn Error + Send + Sync>>>>,
     /// function run to show help screen.
     help: Option<Box<dyn Fn(HelpReason, &Command, Args)>>,
     /// optional short description of the command.
@@ -71,7 +94,10 @@ impl Command {
     }
 
     /// sets the action to run for the command.
-    pub fn action<T: Fn(Args) -> i32 + 'static>(&mut self, action: T) -> &mut Self {
+    pub fn action<T: Fn(Args) -> Result<(), Box<dyn Error + Send + Sync>> + 'static>(
+        &mut self,
+        action: T,
+    ) -> &mut Self {
         self.action = Some(Box::new(action));
         self
     }
@@ -165,7 +191,7 @@ impl Command {
     }
 
     /// runs the command with given argument strings.
-    pub fn run(&self, args: Vec<String>) -> i32 {
+    pub fn run(&self, args: Vec<String>) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let (command, args, help_option) = Args::parse(self, args);
         if args.has("--help") {
             let reason = HelpReason::MissingAction;
@@ -173,7 +199,7 @@ impl Command {
                 Some(help) => help(reason, command, args),
                 None => command.default_help(reason),
             }
-            return 0;
+            return Ok(());
         }
 
         // check for required options
@@ -191,32 +217,30 @@ impl Command {
             }
 
             if !found {
-                let reason = HelpReason::MissingOption(option);
+                let reason = HelpReason::MissingOption(option.clone());
                 match help_option {
                     Some(help) => help(reason, command, args),
                     None => command.default_help(reason),
                 }
-                return 1;
+                return Err(Box::new(CommandError::MissingOption(option.clone())));
             }
         }
 
         // check for required arguments
         for (pos, arg) in command.arguments.iter().enumerate() {
             if arg.required && !args.has_at(pos) {
-                let reason = HelpReason::MissingArgument(
-                    pos,
-                    if arg.array {
-                        command.arguments.len()
-                    } else {
-                        pos
-                    },
-                );
+                let end = if arg.array {
+                    command.arguments.len()
+                } else {
+                    pos
+                };
+                let reason = HelpReason::MissingArgument(pos, end);
                 match help_option {
                     Some(help) => help(reason, command, args),
                     None => command.default_help(reason),
                 }
 
-                return 1;
+                return Err(Box::new(CommandError::MissingArgument(pos, end)));
             }
         }
 
@@ -228,18 +252,18 @@ impl Command {
                     Some(help) => help(reason, command, args),
                     None => command.default_help(reason),
                 }
-                0
+                Ok(())
             }
         }
     }
 
     /// runs the command with argument string slices.
-    pub fn run_str(&self, args: Vec<&str>) -> i32 {
+    pub fn run_str(&self, args: Vec<&str>) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         self.run(args.iter().map(|arg| arg.to_string()).collect())
     }
 
     /// runs the command using environment arguments.
-    pub fn run_env(&self) -> i32 {
+    pub fn run_env(&self) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         self.run(env::args().skip(1).collect())
     }
 

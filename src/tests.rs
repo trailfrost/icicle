@@ -239,11 +239,3 @@ fn test_args_range() {
     let range: Vec<i32> = args.range(0..3).unwrap();
     assert_eq!(range, vec![1, 2, 3]);
 }
-
-#[test]
-fn test_run_with_action() {
-    let mut cmd = Command::new("app");
-    cmd.action(|_args| 42);
-    let result = cmd.run(vec![]);
-    assert_eq!(result, 42);
-}

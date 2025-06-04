@@ -18,7 +18,7 @@ fn main() {
                 println!("Hello, {}!", arg);
             }
 
-            0
+            Ok(())
         });
 
     program
@@ -31,7 +31,7 @@ fn main() {
             let y = args.get_or::<i32>("-y", "--y").unwrap();
             println!("{x} + {y} = {}", x + y);
 
-            0
+            Ok(())
         })
         .command("infinite")
         .desc("Add any amount of numbers.")
@@ -43,10 +43,13 @@ fn main() {
             }
             println!("{} = {}", args.join(" + "), sum);
 
-            0
+            Ok(())
         });
 
-    process::exit(program.run_env());
+    if let Err(error) = program.run_env() {
+        println!("Error: {error}");
+        process::exit(1);
+    }
 }
 ```
 
