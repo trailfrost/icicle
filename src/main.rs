@@ -22,8 +22,8 @@ fn main() {
         .option("-x, --x", "First number")
         .option("-y, --y", "Second number")
         .action(|args| {
-            let x = args.get::<i32>("x").unwrap();
-            let y = args.get::<i32>("y").unwrap();
+            let x = args.get_or::<i32>("-x", "--x").unwrap();
+            let y = args.get_or::<i32>("-y", "--y").unwrap();
             println!("{x} + {y} = {}", x + y);
 
             0
@@ -36,7 +36,7 @@ fn main() {
             for arg in args.iter() {
                 sum += arg.parse::<i32>().unwrap();
             }
-            println!("the sum is {sum}");
+            println!("{} = {}", args.join(" + "), sum);
 
             0
         });

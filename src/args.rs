@@ -66,13 +66,13 @@ impl Args {
                     let value = split.get(1).unwrap_or(&"true");
                     parsed_args.opts.insert(name.to_string(), value.to_string());
                     continue;
-                } else if arg.starts_with('-') && arg.len() > 1 {
+                } else if arg.starts_with('-') {
                     // parses one or more short options with optional value.
                     let split: Vec<&str> = arg.splitn(2, '=').collect();
                     let chars: Vec<char> = split[0].chars().skip(1).collect(); // skip leading '-'
                     let value = split.get(1).unwrap_or(&"true");
                     for ch in chars {
-                        parsed_args.opts.insert(ch.to_string(), value.to_string());
+                        parsed_args.opts.insert(format!("-{ch}"), value.to_string());
                     }
                     continue;
                 }
@@ -220,5 +220,9 @@ impl Args {
     /// returns a mutable iterator over options.
     pub fn iter_mut_opt(&mut self) -> MapIterMut<String, String> {
         self.opts.iter_mut()
+    }
+
+    pub fn join(&self, separator: &str) -> String {
+        self.pos.join(separator).to_string()
     }
 }

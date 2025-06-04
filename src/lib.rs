@@ -7,13 +7,13 @@ use std::{env, str::FromStr};
 use args::Args;
 
 /// reasons for a help screen to be triggered.
-pub enum HelpReason {
+pub enum HelpReason<'a> {
     /// user asked for help with `--help`.
     UserAsked,
     /// command lacks an action.
     MissingAction,
     /// required option missing from arguments.
-    MissingOption(CLIOption),
+    MissingOption(&'a CLIOption),
     /// required positional argument missing, given start and end indexes.
     MissingArgument(usize, usize),
 }
@@ -174,6 +174,50 @@ impl Command {
                 None => command.default_help(reason),
             }
             return 0;
+        }
+
+        // check for required options
+        for option in command.options.iter() {
+            if !option.required {
+                continue;
+            }
+
+            let mut found = false;
+            for name in option.names.iter() {
+                if args.has(name) {
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                let reason = HelpReason::MissingOption(option);
+                match help_option {
+                    Some(help) => help(reason, command, args),
+                    None => command.default_help(reason),
+                }
+                return 1;
+            }
+        }
+
+        // check for required arguments
+        for (pos, arg) in command.arguments.iter().enumerate() {
+            if arg.required && !args.has_at(pos) {
+                let reason = HelpReason::MissingArgument(
+                    pos,
+                    if arg.array {
+                        command.arguments.len()
+                    } else {
+                        pos
+                    },
+                );
+                match help_option {
+                    Some(help) => help(reason, command, args),
+                    None => command.default_help(reason),
+                }
+
+                return 1;
+            }
         }
 
         match &command.action {
