@@ -1,0 +1,20 @@
+name: Publish
+on:
+  push:
+    tags:
+      - v*
+env:
+  CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+jobs:
+  # Test and publish package
+  publish:
+    runs-on: ubuntu-latest
+    container:
+      image: rust:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Test
+        run: cargo test
+      - name: Publish
+        run: cargo publish --token $CRATES_IO_TOKEN
