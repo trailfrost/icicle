@@ -1,8 +1,8 @@
 use icicle::Command;
-use std::process;
 
 fn main() {
     let mut program = Command::new("human");
+    program.desc("Greet people and add numbers.");
 
     program
         .command("greet")
@@ -36,13 +36,12 @@ fn main() {
             for arg in args.iter() {
                 sum += arg.parse::<i32>().unwrap();
             }
-            println!("{} = {}", args.join(" + "), sum);
+            println!("{} = {}", args.pos.join(" + "), sum);
 
             Ok(())
         });
 
-    if let Err(error) = program.run_env() {
-        println!("Error: {error}");
-        process::exit(1);
+    if let Err(_) = program.run_env() {
+        std::process::exit(1);
     }
 }

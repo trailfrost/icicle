@@ -222,8 +222,17 @@ impl Args {
         self.opts.iter_mut()
     }
 
-    /// joins all positional arguments together.
+    /// joins positional arguments.
     pub fn join(&self, separator: &str) -> String {
-        self.pos.join(separator).to_string()
+        self.pos.join(separator)
+    }
+}
+
+impl IntoIterator for Args {
+    type Item = String;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.pos.into_iter()
     }
 }
